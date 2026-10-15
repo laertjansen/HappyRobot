@@ -1,0 +1,226 @@
+// THIS VERSION HAS 2 LED EYES CONNECTED TO PIN 10 IN PARALLEL
+// THE COLORFUL VERSION HAS NO LEDS AS YOU CAN SEE IN THE PICS
+
+#include <Servo.h>
+
+#define MOTORA_IN1 9
+#define MOTORA_IN2 2
+
+#define MOTORB_IN1 7
+#define MOTORB_IN2 6
+
+#define ENA 5
+#define ENB 3
+
+#define BUTTON_PIN 4
+
+bool carRunning = false;
+bool lastButtonState = HIGH;
+
+#define POT_PIN A0
+
+#define TRIG_PIN 11
+#define ECHO_PIN 12
+
+#define SERVO_PIN 8
+
+Servo myServo;
+
+int servoAngle = 0;
+int servoDirection = 1;
+
+unsigned long lastServoMove = 0;
+
+const int servoMinAngle = 0;
+const int servoMaxAngle = 80;
+
+const int servoDelay = 30;
+
+#define LED_PIN 10
+
+unsigned long lastLedBlink = 0;
+
+const int ledBlinkDelay = 500;
+
+bool ledState = LOW;
+
+void setup()
+{
+    Serial.begin(9600);
+
+    pinMode(MOTORA_IN1, OUTPUT);
+    pinMode(MOTORA_IN2, OUTPUT);
+
+    pinMode(MOTORB_IN1, OUTPUT);
+    pinMode(MOTORB_IN2, OUTPUT);
+
+    pinMode(ENA, OUTPUT);
+    pinMode(ENB, OUTPUT);
+
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+    pinMode(TRIG_PIN, OUTPUT);
+    pinMode(ECHO_PIN, INPUT);
+
+    myServo.attach(SERVO_PIN);
+    myServo.write(servoAngle);
+
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
+
+    stopMotors();
+}
+
+void loop()
+{
+    if (millis() - lastLedBlink >= ledBlinkDelay)
+    {
+        lastLedBlink = millis();
+
+        ledState = !ledState;
+
+        digitalWrite(LED_PIN, ledState);
+    }
+
+    bool buttonState = digitalRead(BUTTON_PIN);
+
+    if (lastButtonState == HIGH && buttonState == LOW)
+    {
+        carRunning = !carRunning;
+
+        if (!carRunning)
+        {
+            stopMotors();
+        }
+
+        delay(200);
+    }
+
+    lastButtonState = buttonState;
+
+    if (!carRunning)
+    {
+        stopMotors();
+        return;
+    }
+
+    int potValue = analogRead(POT_PIN);
+
+    int motorSpeed = map(
+        potValue,
+        0,
+        1023,
+        0,
+        255
+    );
+
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
+
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+
+    digitalWrite(TRIG_PIN, LOW);
+
+    long duration = pulseIn(ECHO_PIN, HIGH);
+
+    int distance = duration / 58;
+
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.print(" cm");
+
+    Serial.print(" | Speed: ");
+    Serial.print(motorSpeed);
+
+    Serial.print(" | Servo: ");
+    Serial.println(servoAngle);
+
+    if (distance > 0 && distance < 10)
+    {
+        stopMotors();
+        delay(200);
+
+        moveBackward(motorSpeed);
+        delay(500);
+
+        turnRight(motorSpeed);
+        delay(500);
+
+        stopMotors();
+        delay(100);
+    }
+    else
+    {
+        moveForward(motorSpeed);
+
+        if (millis() - lastServoMove >= servoDelay)
+        {
+            lastServoMove = millis();
+
+            servoAngle += servoDirection;
+
+            if (servoAngle >= servoMaxAngle)
+            {
+                servoAngle = servoMaxAngle;
+                servoDirection = -1;
+            }
+
+            if (servoAngle <= servoMinAngle)
+            {
+                servoAngle = servoMinAngle;
+                servoDirection = 1;
+            }
+
+            myServo.write(servoAngle);
+        }
+    }
+}
+
+void moveForward(int motorSpeed)
+{
+    digitalWrite(MOTORA_IN1, HIGH);
+    digitalWrite(MOTORA_IN2, LOW);
+
+    digitalWrite(MOTORB_IN1, HIGH);
+    digitalWrite(MOTORB_IN2, LOW);
+
+    analogWrite(ENA, motorSpeed);
+    analogWrite(ENB, motorSpeed);
+}
+
+void moveBackward(int motorSpeed)
+{
+    digitalWrite(MOTORA_IN1, LOW);
+    digitalWrite(MOTORA_IN2, HIGH);
+
+    digitalWrite(MOTORB_IN1, LOW);
+    digitalWrite(MOTORB_IN2, HIGH);
+
+    analogWrite(ENA, motorSpeed);
+    analogWrite(ENB, motorSpeed);
+}
+
+void turnRight(int motorSpeed)
+{
+    digitalWrite(MOTORA_IN1, HIGH);
+    digitalWrite(MOTORA_IN2, LOW);
+
+    digitalWrite(MOTORB_IN1, LOW);
+    digitalWrite(MOTORB_IN2, LOW);
+
+    analogWrite(ENA, motorSpeed);
+    analogWrite(ENB, 0);
+}
+
+void stopMotors()
+{
+    analogWrite(ENA, 0);
+    analogWrite(ENB, 0);
+
+    digitalWrite(MOTORA_IN1, LOW);
+    digitalWrite(MOTORA_IN2, LOW);
+
+    digitalWrite(MOTORB_IN1, LOW);
+    digitalWrite(MOTORB_IN2, LOW);
+}
